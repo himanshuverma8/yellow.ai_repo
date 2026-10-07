@@ -1,0 +1,1468 @@
+{
+  "info": {
+    "name": "Coupon Redemption Service",
+    "description": "Run the whole collection with the Collection Runner (in order). Needs the DB seeded: `npm run db:seed` (FLASH5, WELCOME10, REFER20, LASTONE, EXPIRED15).\nSet the `baseUrl` collection variable to match your PORT. Every run generates a fresh `runId` so ids never collide.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "runId",
+      "value": ""
+    },
+    {
+      "key": "futureDate",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get(\"runId\")) pm.collectionVariables.set(\"runId\", Date.now().toString(36));",
+          "pm.collectionVariables.set(\"futureDate\", new Date(Date.now() + 24 * 3600 * 1000).toISOString());"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"runId\", Date.now().toString(36));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status ok\", () => pm.expect(pm.response.json().status).to.eql(\"ok\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /health/db (DB check)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"db connected\", () => { pm.expect(b.status).to.eql(\"ok\"); pm.expect(b.db).to.eql(\"connected\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health/db",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "db"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Coupons",
+      "item": [
+        {
+          "name": "GET seeded coupon FLASH5",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"has counters, remaining = max - redeemed\", () => {",
+                  "  pm.expect(b).to.have.keys(\"redeemed_count\", \"remaining\", \"max_redemptions\");",
+                  "  pm.expect(b.remaining).to.eql(b.max_redemptions - b.redeemed_count);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/coupons/FLASH5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "coupons",
+                "FLASH5"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST create STACKABLE coupon (max 1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"coupon created\", () => {",
+                  "  pm.expect(b.code).to.eql(\"FLASH-\" + pm.collectionVariables.get(\"runId\").toUpperCase());",
+                  "  pm.expect(b.max_redemptions).to.eql(1);",
+                  "  pm.expect(b.redeemed_count).to.eql(0);",
+                  "  pm.expect(b.type).to.eql(\"STACKABLE\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"FLASH-{{runId}}\",\n  \"max_redemptions\": 1,\n  \"discount_percent\": 30,\n  \"expires_at\": \"{{futureDate}}\",\n  \"type\": \"STACKABLE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/coupons",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "coupons"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST create STANDARD coupon (max 10)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"STD-{{runId}}\",\n  \"max_redemptions\": 10,\n  \"discount_percent\": 15,\n  \"expires_at\": \"{{futureDate}}\",\n  \"type\": \"STANDARD\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/coupons",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "coupons"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST duplicate code -> COUPON_ALREADY_EXISTS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error code is COUPON_ALREADY_EXISTS\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"COUPON_ALREADY_EXISTS\");",
+                  "  pm.expect(e.type).to.eql(\"CONFLICT\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"FLASH-{{runId}}\",\n  \"max_redemptions\": 1,\n  \"discount_percent\": 30,\n  \"expires_at\": \"{{futureDate}}\",\n  \"type\": \"STACKABLE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/coupons",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "coupons"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST invalid body -> VALIDATION_ERROR",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code is VALIDATION_ERROR\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"VALIDATION_ERROR\");",
+                  "  pm.expect(e.type).to.eql(\"VALIDATION\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});",
+                  "pm.test(\"lists every bad field\", () => pm.expect(pm.response.json().error.details).to.have.length(5));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"code\": \"bad code!\", \"max_redemptions\": 0, \"discount_percent\": 101, \"expires_at\": \"nope\", \"type\": \"X\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/coupons",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "coupons"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET unknown coupon -> COUPON_NOT_FOUND",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error code is COUPON_NOT_FOUND\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"COUPON_NOT_FOUND\");",
+                  "  pm.expect(e.type).to.eql(\"NOT_FOUND\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/coupons/DOESNOTEXIST",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "coupons",
+                "DOESNOTEXIST"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Redeem",
+      "item": [
+        {
+          "name": "Redeem WELCOME10 (customer A, order 1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"success true\", () => {",
+                  "  pm.expect(b.success).to.eql(true);",
+                  "  pm.expect(b.remaining).to.be.a(\"number\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"WELCOME10\",\n  \"customer_id\": \"cust-{{runId}}-a\",\n  \"order_id\": \"ord-{{runId}}-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Retry same Idempotency-Key -> replayed, not double-redeemed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"success true\", () => {",
+                  "  pm.expect(b.success).to.eql(true);",
+                  "  pm.expect(b.remaining).to.be.a(\"number\");",
+                  "});",
+                  "pm.test(\"flagged as replay\", () => pm.response.to.have.header(\"Idempotent-Replayed\", \"true\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"WELCOME10\",\n  \"customer_id\": \"cust-{{runId}}-a\",\n  \"order_id\": \"ord-{{runId}}-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Same key, different payload -> IDEMPOTENCY_KEY_REUSED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error code is IDEMPOTENCY_KEY_REUSED\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"IDEMPOTENCY_KEY_REUSED\");",
+                  "  pm.expect(e.type).to.eql(\"BUSINESS_RULE\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"WELCOME10\",\n  \"customer_id\": \"cust-{{runId}}-a\",\n  \"order_id\": \"ord-{{runId}}-other\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Missing Idempotency-Key -> IDEMPOTENCY_KEY_REQUIRED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error code is IDEMPOTENCY_KEY_REQUIRED\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"IDEMPOTENCY_KEY_REQUIRED\");",
+                  "  pm.expect(e.type).to.eql(\"VALIDATION\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"WELCOME10\",\n  \"customer_id\": \"cust-{{runId}}-a\",\n  \"order_id\": \"ord-{{runId}}-nokey\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "STANDARD again, same customer -> COUPON_ALREADY_USED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error code is COUPON_ALREADY_USED\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"COUPON_ALREADY_USED\");",
+                  "  pm.expect(e.type).to.eql(\"CONFLICT\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-2"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"WELCOME10\",\n  \"customer_id\": \"cust-{{runId}}-a\",\n  \"order_id\": \"ord-{{runId}}-2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "STACKABLE REFER20, customer A, order 3",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"success true\", () => {",
+                  "  pm.expect(b.success).to.eql(true);",
+                  "  pm.expect(b.remaining).to.be.a(\"number\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-3"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"REFER20\",\n  \"customer_id\": \"cust-{{runId}}-a\",\n  \"order_id\": \"ord-{{runId}}-3\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "STACKABLE REFER20, customer A again (no per-customer limit)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"success true\", () => {",
+                  "  pm.expect(b.success).to.eql(true);",
+                  "  pm.expect(b.remaining).to.be.a(\"number\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-4"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"REFER20\",\n  \"customer_id\": \"cust-{{runId}}-a\",\n  \"order_id\": \"ord-{{runId}}-4\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Expired coupon -> COUPON_EXPIRED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error code is COUPON_EXPIRED\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"COUPON_EXPIRED\");",
+                  "  pm.expect(e.type).to.eql(\"BUSINESS_RULE\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-5"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"EXPIRED15\",\n  \"customer_id\": \"cust-{{runId}}-a\",\n  \"order_id\": \"ord-{{runId}}-5\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unknown code -> COUPON_NOT_FOUND",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error code is COUPON_NOT_FOUND\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"COUPON_NOT_FOUND\");",
+                  "  pm.expect(e.type).to.eql(\"NOT_FOUND\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-6"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"NOPE\",\n  \"customer_id\": \"cust-{{runId}}-a\",\n  \"order_id\": \"ord-{{runId}}-6\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Order belongs to another customer -> ORDER_CUSTOMER_MISMATCH",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error code is ORDER_CUSTOMER_MISMATCH\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"ORDER_CUSTOMER_MISMATCH\");",
+                  "  pm.expect(e.type).to.eql(\"BUSINESS_RULE\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-7"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"WELCOME10\",\n  \"customer_id\": \"cust-{{runId}}-b\",\n  \"order_id\": \"ord-{{runId}}-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Order already has a coupon -> ORDER_ALREADY_HAS_COUPON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error code is ORDER_ALREADY_HAS_COUPON\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"ORDER_ALREADY_HAS_COUPON\");",
+                  "  pm.expect(e.type).to.eql(\"CONFLICT\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-8"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"REFER20\",\n  \"customer_id\": \"cust-{{runId}}-a\",\n  \"order_id\": \"ord-{{runId}}-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Max redemptions + cancel (STACKABLE, max 1)",
+      "item": [
+        {
+          "name": "Redeem last slot (customer C, order F1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"success true, remaining 0\", () => {",
+                  "  pm.expect(b.success).to.eql(true);",
+                  "  pm.expect(b.remaining).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-f1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"FLASH-{{runId}}\",\n  \"customer_id\": \"cust-{{runId}}-c\",\n  \"order_id\": \"ord-{{runId}}-f1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Another customer -> COUPON_EXHAUSTED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error code is COUPON_EXHAUSTED\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"COUPON_EXHAUSTED\");",
+                  "  pm.expect(e.type).to.eql(\"CONFLICT\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-f2-try1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"FLASH-{{runId}}\",\n  \"customer_id\": \"cust-{{runId}}-d\",\n  \"order_id\": \"ord-{{runId}}-f2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET counters: 1 redeemed, 0 remaining",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"1/0/1\", () => pm.expect(pm.response.json()).to.eql({ redeemed_count: 1, remaining: 0, max_redemptions: 1 }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/coupons/FLASH-{{runId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "coupons",
+                "FLASH-{{runId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel order F1 -> slot released",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"released\", () => pm.expect(pm.response.json()).to.eql({ success: true, already_cancelled: false, coupon_released: true }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/ord-{{runId}}-f1/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "ord-{{runId}}-f1",
+                "cancel"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel order F1 AGAIN -> no-op",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"no-op\", () => pm.expect(pm.response.json()).to.eql({ success: true, already_cancelled: true, coupon_released: false }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/ord-{{runId}}-f1/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "ord-{{runId}}-f1",
+                "cancel"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET counters: 0 redeemed, 1 remaining (no double refund)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"0/1/1\", () => pm.expect(pm.response.json()).to.eql({ redeemed_count: 0, remaining: 1, max_redemptions: 1 }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/coupons/FLASH-{{runId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "coupons",
+                "FLASH-{{runId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Redeem on the cancelled order -> ORDER_CANCELLED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error code is ORDER_CANCELLED\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"ORDER_CANCELLED\");",
+                  "  pm.expect(e.type).to.eql(\"BUSINESS_RULE\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-f1-again"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"FLASH-{{runId}}\",\n  \"customer_id\": \"cust-{{runId}}-c\",\n  \"order_id\": \"ord-{{runId}}-f1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Freed slot goes to customer D",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"success true, remaining 0\", () => {",
+                  "  pm.expect(b.success).to.eql(true);",
+                  "  pm.expect(b.remaining).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-f2-try2"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"FLASH-{{runId}}\",\n  \"customer_id\": \"cust-{{runId}}-d\",\n  \"order_id\": \"ord-{{runId}}-f2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel unknown order -> ORDER_NOT_FOUND",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error code is ORDER_NOT_FOUND\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"ORDER_NOT_FOUND\");",
+                  "  pm.expect(e.type).to.eql(\"NOT_FOUND\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/ord-{{runId}}-ghost/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "ord-{{runId}}-ghost",
+                "cancel"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. STANDARD once per customer, cancel frees the use",
+      "item": [
+        {
+          "name": "Customer E redeems STANDARD coupon",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"success true, remaining 9\", () => {",
+                  "  pm.expect(b.success).to.eql(true);",
+                  "  pm.expect(b.remaining).to.eql(9);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-s1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"STD-{{runId}}\",\n  \"customer_id\": \"cust-{{runId}}-e\",\n  \"order_id\": \"ord-{{runId}}-s1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Customer E again -> COUPON_ALREADY_USED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error code is COUPON_ALREADY_USED\", () => {",
+                  "  const e = pm.response.json().error;",
+                  "  pm.expect(e.code).to.eql(\"COUPON_ALREADY_USED\");",
+                  "  pm.expect(e.type).to.eql(\"CONFLICT\");",
+                  "  pm.expect(e.description).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-s2-try1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"STD-{{runId}}\",\n  \"customer_id\": \"cust-{{runId}}-e\",\n  \"order_id\": \"ord-{{runId}}-s2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel order S1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"released\", () => pm.expect(pm.response.json().coupon_released).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/orders/ord-{{runId}}-s1/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "ord-{{runId}}-s1",
+                "cancel"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Customer E can redeem again after cancel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"success true, remaining 9\", () => {",
+                  "  pm.expect(b.success).to.eql(true);",
+                  "  pm.expect(b.remaining).to.eql(9);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "key-{{runId}}-s2-try2"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"STD-{{runId}}\",\n  \"customer_id\": \"cust-{{runId}}-e\",\n  \"order_id\": \"ord-{{runId}}-s2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/redeem",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redeem"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
